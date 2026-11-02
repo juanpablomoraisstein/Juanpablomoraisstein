@@ -10,11 +10,11 @@ async def main():
   page=await browser.new_page(viewport={'width':1280,'height':1000})
   await page.goto((ROOT/'assets/terminal-desktop.svg').as_uri())
   await page.wait_for_timeout(100)
-  selectors=['#matrix-rain .rain-motion > g:first-child','#lens-reflections .rain-motion > g:first-child']
+  selectors=['#matrix-rain .rain-motion > g:first-child']
   before=[await page.locator(s).first.evaluate('(el)=>el.getCTM().f') for s in selectors]
   await page.wait_for_timeout(800)
   after=[await page.locator(s).first.evaluate('(el)=>el.getCTM().f') for s in selectors]
-  for name,a,b in zip(['background','lenses'],before,after):
+  for name,a,b in zip(['background'],before,after):
    assert abs(b-a)>3,(name,a,b)
    print('PASS animated',name,'vertical movement',round(b-a,1),'px')
   await page.screenshot(path=str(ROOT/'.preview/animated-final.png'))

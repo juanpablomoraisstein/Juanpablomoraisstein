@@ -12,15 +12,25 @@ SOURCE = ROOT / 'assets/source/portrait.png'
 FONT = "'Liberation Mono', 'DejaVu Sans Mono', Consolas, 'Courier New', monospace"
 COLORS = {'bg':'#0c111b','panel':'#101723','bar':'#141d2b','border':'#293547','text':'#e6edf3',
           'muted':'#8796ac','dim':'#53647c','blue':'#66aaff','cyan':'#68d9e9','orange':'#f4ae72'}
-# Coordinates refer directly to the original 864 x 1536 photograph.
-CROP = (10, 180, 800, 1330)
-SILHOUETTE = [(48,470),(30,429),(53,365),(93,311),(146,280),(216,251),(274,240),
- (325,206),(376,216),(434,211),(480,204),(535,215),(594,219),(649,242),(697,287),
- (735,344),(744,408),(728,461),(710,510),(683,553),(681,635),(690,692),(677,757),
- (650,808),(625,851),(611,910),(597,970),(599,1028),(610,1052),
- (644,1067),(716,1078),(800,1086),(800,1330),(10,1330),(10,1145),
- (70,1135),(131,1118),(188,1096),(218,1063),(239,1025),(244,987),
- (227,941),(207,897),(174,839),(147,806),(136,739),(139,669),(135,618),(112,572),(84,543)]
+# Coordinates refer to the new 960 x 1280 mirror photograph.
+CROP = (0, 230, 960, 1280)
+# Separate shapes retain the curtain gap between the face and the phone.
+SILHOUETTES = [
+ [(0,470),(18,416),(51,375),(103,336),(165,301),(216,289),(275,295),
+  (333,316),(384,345),(425,388),(457,439),(468,482),(457,527),
+  (445,566),(451,606),(447,653),(436,704),(424,754),(406,806),
+  (394,844),(421,857),(455,868),(491,892),(552,942),(616,1011),
+  (660,1123),(682,1280),(0,1280),(0,990),(46,963),(92,937),
+  (131,912),(145,881),(145,841),(131,799),(111,752),(98,732),
+  (74,746),(45,733),(30,706),(21,671),(20,638),(11,615),(0,606)],
+ [(518,886),(515,743),(506,707),(510,684),(526,668),
+  (515,650),(515,591),(525,563),(545,545),(577,537),(736,532),
+  (775,540),(797,559),(811,586),(813,875),(839,925),(889,972),
+  (960,1041),(960,1280),(744,1280),(702,1243),(673,1215),
+  (635,1202),(594,1187),(563,1168),(537,1137),(515,1100),
+  (502,1058),(480,1038),(469,1009),(471,982),(490,970),
+  (482,951),(468,932),(465,910),(476,890),(497,880)]
+]
 COLS = 144
 ADVANCE = 448 / COLS
 LINE = 650 / 128
@@ -59,7 +69,8 @@ INFO = [
 def portrait():
     source = Image.open(SOURCE).convert('RGB')
     mask = Image.new('L', source.size)
-    ImageDraw.Draw(mask).polygon(SILHOUETTE, fill=255)
+    for silhouette in SILHOUETTES:
+        ImageDraw.Draw(mask).polygon(silhouette, fill=255)
     mask = mask.filter(ImageFilter.GaussianBlur(5))
     cut = source.crop(CROP)
     matte = mask.crop(CROP).resize((COLS,ROWS),Image.Resampling.LANCZOS)
@@ -74,7 +85,7 @@ def portrait():
         text, colors = '', []
         for col in range(COLS):
             alpha = matte.getpixel((col,row))/255
-            value = tone.getpixel((col,row))/255
+            value = (tone.getpixel((col,row))/255)**.65
             if alpha < .4:
                 text += ' ';colors.append(None);continue
             ink = (.14 + .86*value**.8)*glyphs[-1][0]
@@ -112,13 +123,6 @@ def ascii_group(chars,inks,x,y,scale=1):
     elements.append('</g>');return '\n'.join(elements)
 
 
-# Glasses clips follow the two lenses in the source photograph, not generic rectangles.
-LENSES = [
- [(193,635),(226,619),(279,623),(333,640),(355,653),(348,681),(326,710),(279,719),(222,708),(199,685)],
- [(450,643),(487,622),(537,612),(584,614),(620,627),(623,647),(602,679),(555,703),(500,714),(467,697),(450,666)],
-]
-
-
 def source_points(points):
     return ' '.join(f'{(x-CROP[0])/(CROP[2]-CROP[0])*448:.2f},{(y-CROP[1])/(CROP[3]-CROP[1])*ROWS*LINE:.2f}' for x,y in points)
 
@@ -135,8 +139,6 @@ def matrix_defs(width,height,mobile):
     result = [gradient,
        f'<clipPath id="rain-bounds"><rect x="18" y="137" width="{width-36}" height="{height-208}" rx="8"/></clipPath>',
        f'<mask id="rain-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{width}" height="{height}"><rect width="{width}" height="{height}" fill="url(#rain-strength)"/></mask>']
-    for i,lens in enumerate(LENSES):
-        result.append(f'<clipPath id="lens-{i}"><polygon points="{source_points(lens)}"/></clipPath>')
     return ''.join(result)
 
 
@@ -165,27 +167,8 @@ def matrix_background(width,height,mobile):
 
 def portrait_knockout(x,y):
     # The rain passes behind the real silhouette, never through the face/neck.
-    return f'<g transform="translate({x} {y})"><polygon points="{source_points(SILHOUETTE)}" fill="#0d1420"/></g>'
-
-
-def glasses_reflection(x,y):
-    rng=random.Random(1801)
-    output=[f'<g id="lens-reflections" aria-label="Green binary reflections inside the sunglasses" transform="translate({x} {y})">']
-    for index,lens in enumerate(LENSES):
-        coords=[tuple(map(float,point.split(','))) for point in source_points(lens).split()]
-        left,right=min(p[0] for p in coords),max(p[0] for p in coords)
-        top,bottom=min(p[1] for p in coords),max(p[1] for p in coords)
-        output.append(f'<g clip-path="url(#lens-{index})"><g transform="translate(0 {top:g})">')
-        for animated,klass in [(True,'rain-motion'),(False,'rain-still')]:
-            output.append(f'<g class="{klass}">')
-            for col in range(4):
-                position=left+10+col*(right-left-20)/3
-                # Short, sparse trails stay inside the photographed lenses.
-                output.append(binary_stream(position,0,10,6,rng,
-                    animated,bottom-top+18,rng.randrange(6,11),.80,8.5))
-            output.append('</g>')
-        output.append('</g></g>')
-    output.append('</g>');return ''.join(output)
+    shapes=''.join(f'<polygon points="{source_points(shape)}" fill="#0d1420"/>' for shape in SILHOUETTES)
+    return f'<g transform="translate({x} {y})">{shapes}</g>' 
 
 
 def header(width):
@@ -203,7 +186,7 @@ def svg(chars,inks,mobile=False):
     width,height=(720,1887) if mobile else (1240,900)
     out=[f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
 <title id="title">Juan Pablo Morais Stein — terminal profile</title>
-<desc id="desc">Neofetch-inspired profile. ASCII portrait sampled from Juan's photograph, including his hairstyle and sunglasses. Juan is 18 years old, from Gaspar, Santa Catarina, Brazil; a Computer Science Student at FURB focused on Web Development with Java. OS: Omarchy / Arch Linux. Editor: Visual Studio Code. Languages: Portuguese (Native). Instagram: @juan_stein. Email: juanpablomoraisstein@gmail.com.</desc>
+<desc id="desc">Neofetch-inspired profile. ASCII portrait sampled from Juan's photograph, including his hairstyle, earbud and phone. Juan is 18 years old, from Gaspar, Santa Catarina, Brazil; a Computer Science Student at FURB focused on Web Development with Java. OS: Omarchy / Arch Linux. Editor: Visual Studio Code. Languages: Portuguese (Native). Instagram: @juan_stein. Email: juanpablomoraisstein@gmail.com.</desc>
 <defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#101825"/><stop offset="1" stop-color="#0b1019"/></linearGradient>{matrix_defs(width,height,mobile)}</defs>
 <style>.rain-still {{ display:none }} @media (prefers-reduced-motion: reduce) {{ .rain-motion {{ display:none }} .rain-still {{ display:inline }} }}</style>
 <rect x="1" y="1" width="{width-2}" height="{height-2}" rx="17" fill="url(#surface)" stroke="{COLORS['border']}" stroke-width="2"/>
@@ -216,7 +199,6 @@ def svg(chars,inks,mobile=False):
         out.append(matrix_background(width,height,True))
         out.append(portrait_knockout(136,156))
         out.append(ascii_group(chars,inks,136,156,1.0))
-        out.append(glasses_reflection(136,156))
         out.append(f'<path d="M36 824H684" stroke="{COLORS["border"]}"/>')
         x,y=36,878
         out += [text(x,y,'juan@github',30,COLORS['cyan'],700),text(x,y+28,'-----------',25,COLORS['muted'])]
@@ -235,7 +217,6 @@ def svg(chars,inks,mobile=False):
         out.append(matrix_background(width,height,False))
         out.append(portrait_knockout(44,176))
         out.append(ascii_group(chars,inks,44,176,1.0))
-        out.append(glasses_reflection(44,176))
         out.append(f'<path d="M530 163V811" stroke="{COLORS["border"]}"/>')
         x,y=570,179
         out += [text(x,y,'juan@github',27,COLORS['cyan'],700),text(x,y+28,'-----------',22,COLORS['muted'])]

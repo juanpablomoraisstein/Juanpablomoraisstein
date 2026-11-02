@@ -6,11 +6,11 @@ an SVG. Every visible portrait mark in the SVG is a literal ASCII character.
 
 - `terminal-desktop.svg`: 1240 × 900, portrait left / information right.
 - `terminal-mobile.svg`: 720 × 1887, portrait above / readable information below.
-- `portrait.txt`: the 144-column, 128-row portrait as plain ASCII.
-- `source/portrait.png`: original, unmodified source photo (864 × 1536).
+- `portrait.txt`: the 144-column, 96-row portrait as plain ASCII.
+- `source/portrait.png`: original, unmodified source photo (960 × 1280).
 
 Source photo SHA-256:
-`06b519e1c5050caa06157802d2cf1f0f76cdcd4bed549452c0b83f309f7fe8d6`
+`894ef0f512530349742e5a25d526f749228ca00edc11f73e80de5641cd498436`
 
 ## How it is built
 
@@ -22,9 +22,9 @@ python scripts/validate_profile.py
 
 Pillow is a build-time dependency only. The published profile has no runtime
 service, external font, image host, JavaScript or third-party badge dependency.
-The generator uses a foreground silhouette mask to remove the chair/curtain,
+The generator uses a foreground silhouette mask to remove the curtain,
 crops the actual head-and-shoulders photo, adjusts grayscale contrast, and samples
-it into a 144 × 128 grid. Glyph coverage is measured with a real monospace font
+it into a 144 × 96 grid. Glyph coverage is measured with a real monospace font
 instead of assuming that every character has equally spaced brightness.
 Shadows use cool blue/cyan ink; highlights use restrained warm white/orange ink.
 
@@ -62,14 +62,16 @@ horizontal page overflow.
 ## Binary rain and contour update
 
 The neck and shoulders are isolated using a refined silhouette from the original
-photo, with feathered ASCII edges to avoid chair fragments and cut-out gaps.
+photo, with feathered ASCII edges to avoid curtain fragments and cut-out gaps.
 The portrait is an opaque foreground over the rain, so digits stay behind the
 face instead of obscuring it.
 
 Binary streams use native SVG `animateTransform`, not JavaScript, video, GIFs or
 an external service. The green field fades almost completely behind the profile
-information. Two separate clip paths follow the photographed sunglasses lenses;
-only a few brighter, slower streams appear as reflections inside them.
+information. The original green background animation is retained. The current mirror photo
+has no sunglasses, so the former lens-reflection overlays have been removed
+instead of being drawn over the eyes. The phone, hand and earbud remain part
+of the photo-derived ASCII portrait.
 
 The `prefers-reduced-motion` media query replaces the moving layers with static
 digits. To check movement and the static fallback in the development environment:
