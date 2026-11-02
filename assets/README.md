@@ -1,18 +1,35 @@
 # Terminal profile assets
 
-The portrait is sampled from **Juan's actual attached photograph**, preserved in
-`source/portrait.png`. It is not a generated avatar or a raster image embedded in
-an SVG. Every visible portrait mark in the SVG is a literal ASCII character.
+This profile uses only Juan's latest portrait: the close-up with clear glasses
+and a black hoodie. Earlier portraits are not used by the current README or assets.
+The face is actual photo-derived ASCII, not an invented avatar or embedded raster.
 
-- `terminal-desktop.svg`: 1240 × 900, portrait left / information right.
+- `terminal-desktop.svg`: 1240 × 900, ASCII portrait left / information right.
 - `terminal-mobile.svg`: 720 × 1887, portrait above / readable information below.
-- `portrait.txt`: the 144-column, 96-row portrait as plain ASCII.
-- `source/portrait.png`: original, unmodified source photo (960 × 1280).
+- `portrait.txt`: the same portrait as literal ASCII, 144 columns × 128 rows.
+- `source/portrait.png`: the final photo cropped at native resolution, 1672 × 2426.
 
-Source photo SHA-256:
-`894ef0f512530349742e5a25d526f749228ca00edc11f73e80de5641cd498436`
+## Crop and provenance
 
-## How it is built
+The uploaded photo is 1792 × 3184. The crop rectangle is
+`(left=120, top=70, right=1792, bottom=2496)`. This keeps the full hairstyle,
+clear glasses, face and upper hoodie while removing excess wall and lower torso.
+Its aspect ratio matches the 448 × 650 portrait area to within 0.01%, avoiding
+stretching, a small face or a large empty margin.
+
+Uploaded-photo SHA-256:
+`7bc9f4e65be5a75220723a316f84634cc974795a6a1095cf4618820423f25d18`
+
+Cropped-source SHA-256:
+`eeb93d5c583324d0835c934d983684cb9b9bc70698d4abb27f9a9c69b1874657`
+
+The crop preserves the original pixels; the static SVG is rebuilt from the cropped
+source. No older photo is required. The foreground matte refines the outer band
+of the head and hoodie to suppress the pale wall halo while protecting the eyes,
+glasses and face. ASCII edges are feathered, and the background occlusion follows
+the refined character silhouette instead of a coarse polygon.
+
+## Rebuild and validation
 
 ```sh
 python -m pip install -r requirements-dev.txt
@@ -20,62 +37,34 @@ python scripts/build_profile.py
 python scripts/validate_profile.py
 ```
 
-Pillow is a build-time dependency only. The published profile has no runtime
-service, external font, image host, JavaScript or third-party badge dependency.
-The generator uses a foreground silhouette mask to remove the curtain,
-crops the actual head-and-shoulders photo, adjusts grayscale contrast, and samples
-it into a 144 × 96 grid. Glyph coverage is measured with a real monospace font
-instead of assuming that every character has equally spaced brightness.
-Shadows use cool blue/cyan ink; highlights use restrained warm white/orange ink.
+Pillow is a build-time dependency only. The published assets have no runtime
+service, external font, image hosting, JavaScript or third-party badge dependency.
+ASCII glyph coverage is calibrated with a real monospace font. Explicit character
+coordinates and Liberation Mono / DejaVu Sans Mono / Consolas / Courier New
+fallbacks keep the columns aligned. No font files are redistributed.
 
-The SVG uses real text with explicit character coordinates, plus reliable
-monospace fallbacks: Liberation Mono, DejaVu Sans Mono, Consolas and Courier New.
-It does not depend on SVG font downloads or operating-system font metrics for
-the placement of individual ASCII glyphs. To rebuild on Linux, install Liberation
-Mono or DejaVu Sans Mono; on Windows the generator can use Consolas. To reproduce
-the committed glyph choices exactly, use Liberation Mono and the same Pillow
-version. No font files are redistributed.
+For exact glyph reproduction, use Liberation Mono. To recreate the crop from the
+latest original upload, use Pillow's `Image.crop((120, 70, 1792, 2496))` and save as
+`assets/source/portrait.png` before rebuilding.
 
-The background is opaque and self-contained, so the same design retains its dark
-terminal appearance in both GitHub themes. README's `<picture>` switches to the
-stacked layout at viewport widths of 768px or less. Contact links and an accessible
-plain-text copy of the profile remain ordinary Markdown/HTML below the graphic.
-The source photo remains in this repository so the conversion is reproducible.
+The green binary background, terminal colors, profile information and contact
+links are retained. Native SVG `animateTransform` drives the falling numbers;
+`prefers-reduced-motion` replaces the moving layer with static digits. No effects
+are drawn over the eyes or glasses. Both GitHub themes use the same opaque dark
+terminal surface. The README switches to the mobile SVG at 768px or below.
 
-## Optional browser checks
+## Optional browser QA
 
-With a local Chromium installation and Playwright installed in a development
-Python environment:
+With Playwright and a local Chromium installation in a development environment:
 
 ```sh
 python scripts/preview_profile.py
 python scripts/check_rendering.py
-```
-
-Set `CHROMIUM_PATH` if the executable is not `/usr/bin/chromium`.
-These commands write local previews to the ignored `.preview/` directory; no
-browser-testing dependency is needed to display the profile. The checks cover
-light/dark backgrounds, desktop, 768px tablet, 390px phone and 320px phone widths,
-assert the correct responsive asset is chosen, and check for text clipping and
-horizontal page overflow.
-
-## Binary rain and contour update
-
-The neck and shoulders are isolated using a refined silhouette from the original
-photo, with feathered ASCII edges to avoid curtain fragments and cut-out gaps.
-The portrait is an opaque foreground over the rain, so digits stay behind the
-face instead of obscuring it.
-
-Binary streams use native SVG `animateTransform`, not JavaScript, video, GIFs or
-an external service. The green field fades almost completely behind the profile
-information. The original green background animation is retained. The current mirror photo
-has no sunglasses, so the former lens-reflection overlays have been removed
-instead of being drawn over the eyes. The phone, hand and earbud remain part
-of the photo-derived ASCII portrait.
-
-The `prefers-reduced-motion` media query replaces the moving layers with static
-digits. To check movement and the static fallback in the development environment:
-
-```sh
 python scripts/check_animation.py
 ```
+
+Set `CHROMIUM_PATH` for the viewport checker if Chromium is not at
+`/usr/bin/chromium`. Local screenshots and reports go to the ignored `.preview/`
+directory. Checks cover light/dark backgrounds, desktop, 768px tablet, 390px phone
+and 320px phone; correct responsive source selection, text clipping, horizontal
+overflow, actual downward animation and the static reduced-motion fallback.

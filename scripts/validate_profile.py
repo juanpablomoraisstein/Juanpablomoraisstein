@@ -6,7 +6,7 @@ import re
 import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parents[1]
-EXPECTED_HASH='894ef0f512530349742e5a25d526f749228ca00edc11f73e80de5641cd498436'
+EXPECTED_HASH='eeb93d5c583324d0835c934d983684cb9b9bc70698d4abb27f9a9c69b1874657'
 EXPECTED=[
  'juan@github','Juan Pablo Morais Stein','18 years old',
  'Gaspar, Santa Catarina, Brazil','Computer Science Student at FURB',
@@ -20,7 +20,7 @@ NS='{http://www.w3.org/2000/svg}'
 def main():
  assert hashlib.sha256((ROOT/'assets/source/portrait.png').read_bytes()).hexdigest()==EXPECTED_HASH,'Source photo differs from original upload'
  ascii_lines=(ROOT/'assets/portrait.txt').read_text().splitlines()
- assert len(ascii_lines)==96 and max(map(len,ascii_lines))==144
+ assert len(ascii_lines)==128 and max(map(len,ascii_lines))==144
  assert all(ord(char)<128 for line in ascii_lines for char in line),'Not literal ASCII'
  for file in ('terminal-desktop.svg','terminal-mobile.svg'):
   path=ROOT/'assets'/file
@@ -46,6 +46,6 @@ def main():
  for path in re.findall(r'(?:src|srcset)="([^"]+)"',readme):assert (ROOT/path).is_file(),path
  assert 'https://instagram.com/juan_stein' in readme
  assert 'mailto:juanpablomoraisstein@gmail.com' in readme
- print('PASS: original photo hash, 144×96 ASCII, responsive sources, accessible text and contact links')
+ print('PASS: original photo hash, 144×128 ASCII, responsive sources, accessible text and contact links')
 
 if __name__=='__main__':main()

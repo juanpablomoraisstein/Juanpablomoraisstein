@@ -17,7 +17,7 @@ audit='''
     const bounds=svg.getBoundingClientRect();
     const clipped=[];
     for(const node of svg.querySelectorAll('text')){
-      if(node.closest('#matrix-rain, #lens-reflections')) continue;
+      if(node.closest('#matrix-rain')) continue;
       const r=node.getBoundingClientRect();
       if(r.width&&(r.left<bounds.left-1||r.right>bounds.right+1||r.top<bounds.top-1||r.bottom>bounds.bottom+1))clipped.push(node.textContent);
     }

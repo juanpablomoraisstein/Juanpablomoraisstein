@@ -5,31 +5,30 @@ from pathlib import Path
 from html import escape
 import hashlib
 import random
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'assets/source/portrait.png'
 FONT = "'Liberation Mono', 'DejaVu Sans Mono', Consolas, 'Courier New', monospace"
 COLORS = {'bg':'#0c111b','panel':'#101723','bar':'#141d2b','border':'#293547','text':'#e6edf3',
           'muted':'#8796ac','dim':'#53647c','blue':'#66aaff','cyan':'#68d9e9','orange':'#f4ae72'}
-# Coordinates refer to the new 960 x 1280 mirror photograph.
-CROP = (0, 230, 960, 1280)
-# Separate shapes retain the curtain gap between the face and the phone.
+# Current source is the final photo, cropped at native resolution to 1672 x 2426.
+# Original upload crop: (120, 70, 1792, 2496), preserving the complete hairstyle.
+CROP = (0, 0, 1672, 2426)
 SILHOUETTES = [
- [(0,470),(18,416),(51,375),(103,336),(165,301),(216,289),(275,295),
-  (333,316),(384,345),(425,388),(457,439),(468,482),(457,527),
-  (445,566),(451,606),(447,653),(436,704),(424,754),(406,806),
-  (394,844),(421,857),(455,868),(491,892),(552,942),(616,1011),
-  (660,1123),(682,1280),(0,1280),(0,990),(46,963),(92,937),
-  (131,912),(145,881),(145,841),(131,799),(111,752),(98,732),
-  (74,746),(45,733),(30,706),(21,671),(20,638),(11,615),(0,606)],
- [(518,886),(515,743),(506,707),(510,684),(526,668),
-  (515,650),(515,591),(525,563),(545,545),(577,537),(736,532),
-  (775,540),(797,559),(811,586),(813,875),(839,925),(889,972),
-  (960,1041),(960,1280),(744,1280),(702,1243),(673,1215),
-  (635,1202),(594,1187),(563,1168),(537,1137),(515,1100),
-  (502,1058),(480,1038),(469,1009),(471,982),(490,970),
-  (482,951),(468,932),(465,910),(476,890),(497,880)]
+    [
+        (200, 736), (232, 676), (251, 612), (245, 545), (270, 463), (308, 390),
+        (370, 320), (443, 259), (520, 206), (615, 162), (722, 127), (790, 78),
+        (883, 46), (960, 57), (1047, 84), (1120, 98), (1197, 131), (1305, 159),
+        (1395, 201), (1450, 230), (1480, 284), (1520, 329), (1510, 381), (1560, 439),
+        (1590, 522), (1580, 584), (1630, 640), (1656, 705), (1669, 750), (1634, 795),
+        (1610, 865), (1564, 926), (1530, 955), (1480, 1033), (1420, 1064), (1402, 1093),
+        (1421, 1125), (1480, 1136), (1570, 1150), (1672, 1190), (1672, 1510), (1640, 1630),
+        (1587, 1717), (1650, 1760), (1672, 1850), (1672, 2426), (0, 2426), (0, 1665),
+        (63, 1637), (108, 1593), (100, 1540), (123, 1441), (140, 1342), (170, 1250),
+        (232, 1194), (310, 1152), (346, 1140), (352, 1074), (350, 1010), (344, 953),
+        (348, 905), (372, 875), (385, 855), (340, 831), (292, 807), (247, 784),
+    ]
 ]
 COLS = 144
 ADVANCE = 448 / COLS
@@ -66,12 +65,29 @@ INFO = [
 ]
 
 
+def foreground_mask(source):
+    rough=Image.new('L',source.size)
+    for silhouette in SILHOUETTES:
+        ImageDraw.Draw(rough).polygon(silhouette,fill=255)
+    rough=rough.filter(ImageFilter.GaussianBlur(5))
+    # Refine only the outer band: the wall is light and neutral, unlike dark
+    # hair/hoodie and warm skin. The untouched core protects eyes and glasses.
+    small=rough.resize((source.width//8,source.height//8),Image.Resampling.LANCZOS)
+    core=small.filter(ImageFilter.MinFilter(21)).resize(source.size,Image.Resampling.BILINEAR)
+    core=core.point(lambda value:255 if value>252 else 0)
+    gray=ImageOps.grayscale(source)
+    dark=gray.point(lambda value:max(0,min(255,round((180-value)*255/35))))
+    red,green,blue=source.split()
+    warmth=ImageChops.subtract(red,green).point(lambda value:max(0,min(255,round((value-10)*255/12))))
+    gold=ImageChops.subtract(green,blue).point(lambda value:max(0,min(255,round((value-6)*255/10))))
+    skin=ImageChops.darker(warmth,gold)
+    edge=ImageChops.multiply(rough,ImageChops.lighter(dark,skin))
+    return ImageChops.lighter(core,edge).filter(ImageFilter.GaussianBlur(1.2))
+
+
 def portrait():
     source = Image.open(SOURCE).convert('RGB')
-    mask = Image.new('L', source.size)
-    for silhouette in SILHOUETTES:
-        ImageDraw.Draw(mask).polygon(silhouette, fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(5))
+    mask = foreground_mask(source)
     cut = source.crop(CROP)
     matte = mask.crop(CROP).resize((COLS,ROWS),Image.Resampling.LANCZOS)
     gray = ImageOps.autocontrast(ImageOps.grayscale(cut),cutoff=(1,1))
@@ -165,10 +181,19 @@ def matrix_background(width,height,mobile):
     output.append('</g>');return ''.join(output)
 
 
-def portrait_knockout(x,y):
-    # The rain passes behind the real silhouette, never through the face/neck.
-    shapes=''.join(f'<polygon points="{source_points(shape)}" fill="#0d1420"/>' for shape in SILHOUETTES)
-    return f'<g transform="translate({x} {y})">{shapes}</g>'
+def portrait_knockout(x,y,inks):
+    # Follow the refined ASCII silhouette, not the former coarse polygon.
+    paths=[]
+    for row,colors in enumerate(inks):
+        col=0
+        while col<len(colors):
+            if colors[col] is None:
+                col+=1;continue
+            start=col
+            while col<len(colors) and colors[col] is not None:col+=1
+            left=start*ADVANCE;top=row*LINE-4.5;width=(col-start)*ADVANCE
+            paths.append(f'M{left:g},{top:g}h{width:g}v{LINE+.1:g}h{-width:g}Z')
+    return f'<g transform="translate({x} {y})"><path d="{" ".join(paths)}" fill="#0d1420"/></g>'
 
 
 def header(width):
@@ -186,7 +211,7 @@ def svg(chars,inks,mobile=False):
     width,height=(720,1887) if mobile else (1240,900)
     out=[f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
 <title id="title">Juan Pablo Morais Stein — terminal profile</title>
-<desc id="desc">Neofetch-inspired profile. ASCII portrait sampled from Juan's photograph, including his hairstyle, earbud and phone. Juan is 18 years old, from Gaspar, Santa Catarina, Brazil; a Computer Science Student at FURB focused on Web Development with Java. OS: Omarchy / Arch Linux. Editor: Visual Studio Code. Languages: Portuguese (Native). Instagram: @juan_stein. Email: juanpablomoraisstein@gmail.com.</desc>
+<desc id="desc">Neofetch-inspired profile. ASCII portrait sampled from Juan's photograph, including his hairstyle, clear glasses and black hoodie. Juan is 18 years old, from Gaspar, Santa Catarina, Brazil; a Computer Science Student at FURB focused on Web Development with Java. OS: Omarchy / Arch Linux. Editor: Visual Studio Code. Languages: Portuguese (Native). Instagram: @juan_stein. Email: juanpablomoraisstein@gmail.com.</desc>
 <defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#101825"/><stop offset="1" stop-color="#0b1019"/></linearGradient>{matrix_defs(width,height,mobile)}</defs>
 <style>.rain-still {{ display:none }} @media (prefers-reduced-motion: reduce) {{ .rain-motion {{ display:none }} .rain-still {{ display:inline }} }}</style>
 <rect x="1" y="1" width="{width-2}" height="{height-2}" rx="17" fill="url(#surface)" stroke="{COLORS['border']}" stroke-width="2"/>
@@ -197,7 +222,7 @@ def svg(chars,inks,mobile=False):
             text(171 if mobile else 181,108,'$ neofetch',19,COLORS['text'])]
     if mobile:
         out.append(matrix_background(width,height,True))
-        out.append(portrait_knockout(136,156))
+        out.append(portrait_knockout(136,156,inks))
         out.append(ascii_group(chars,inks,136,156,1.0))
         out.append(f'<path d="M36 824H684" stroke="{COLORS["border"]}"/>')
         x,y=36,878
@@ -215,7 +240,7 @@ def svg(chars,inks,mobile=False):
         out.append(text(x,bottom,'$ _',22,COLORS['cyan']))
     else:
         out.append(matrix_background(width,height,False))
-        out.append(portrait_knockout(44,176))
+        out.append(portrait_knockout(44,176,inks))
         out.append(ascii_group(chars,inks,44,176,1.0))
         out.append(f'<path d="M530 163V811" stroke="{COLORS["border"]}"/>')
         x,y=570,179
