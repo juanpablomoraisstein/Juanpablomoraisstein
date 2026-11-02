@@ -33,6 +33,10 @@ def main():
   assert not any(root.iter(NS+'foreignObject'))
   assert not any(root.iter(NS+'script'))
   assert len(list(root.iter(NS+'tspan')))>500,'Portrait is missing'
+  ids={node.get('id') for node in root.iter()}
+  assert {'matrix-rain','lens-reflections','lens-0','lens-1'}.issubset(ids)
+  assert len(list(root.iter(NS+'animateTransform')))>20,'Binary rain animation is missing'
+  assert 'prefers-reduced-motion' in path.read_text()
   for node in root.iter():
    assert not any(key.endswith('href') for key in node.attrib),'External resource reference found'
   print('PASS:',file,'— all exact facts; ASCII portrait; no scripts, raster or external resources')

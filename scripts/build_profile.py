@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from html import escape
 import hashlib
+import random
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,9 +17,10 @@ CROP = (10, 180, 800, 1330)
 SILHOUETTE = [(48,470),(30,429),(53,365),(93,311),(146,280),(216,251),(274,240),
  (325,206),(376,216),(434,211),(480,204),(535,215),(594,219),(649,242),(697,287),
  (735,344),(744,408),(728,461),(710,510),(683,553),(681,635),(690,692),(677,757),
- (650,808),(625,851),(614,904),(615,986),(649,1078),(754,1129),(800,1168),
- (800,1330),(10,1330),(10,1166),(110,1120),(160,1088),(194,1018),(211,935),
- (192,891),(174,839),(147,806),(136,739),(139,669),(135,618),(112,572),(84,543)]
+ (650,808),(625,851),(611,910),(597,970),(599,1028),(610,1052),
+ (644,1067),(716,1078),(800,1086),(800,1330),(10,1330),(10,1145),
+ (70,1135),(131,1118),(188,1096),(218,1063),(239,1025),(244,987),
+ (227,941),(207,897),(174,839),(147,806),(136,739),(139,669),(135,618),(112,572),(84,543)]
 COLS = 144
 ADVANCE = 448 / COLS
 LINE = 650 / 128
@@ -82,6 +84,9 @@ def portrait():
             stops = [(89,126,164),(116,169,195),(166,199,207),(217,207,188),(248,225,195)]
             bucket = min(4,int(value*5))
             rgb=stops[bucket]
+            # Feather the real shoulder/neck outline instead of cutting a hard edge.
+            strength=min(1,alpha/.95)
+            rgb=tuple(round(bg+(fg-bg)*strength) for bg,fg in zip((13,20,31),rgb))
             colors.append('#%02x%02x%02x'%rgb)
         chars.append(text.rstrip());inks.append(colors)
     return chars,inks
@@ -107,6 +112,82 @@ def ascii_group(chars,inks,x,y,scale=1):
     elements.append('</g>');return '\n'.join(elements)
 
 
+# Glasses clips follow the two lenses in the source photograph, not generic rectangles.
+LENSES = [
+ [(193,635),(226,619),(279,623),(333,640),(355,653),(348,681),(326,710),(279,719),(222,708),(199,685)],
+ [(450,643),(487,622),(537,612),(584,614),(620,627),(623,647),(602,679),(555,703),(500,714),(467,697),(450,666)],
+]
+
+
+def source_points(points):
+    return ' '.join(f'{(x-CROP[0])/(CROP[2]-CROP[0])*448:.2f},{(y-CROP[1])/(CROP[3]-CROP[1])*ROWS*LINE:.2f}' for x,y in points)
+
+
+def matrix_defs(width,height,mobile):
+    # Fade the rain behind the information; keep the portrait and text in front.
+    gradient = ('<linearGradient id="rain-strength" x1="0" y1="0" x2="0" y2="1">'
+                '<stop offset="0" stop-color="white"/><stop offset="0.40" stop-color="white"/>'
+                '<stop offset="0.45" stop-color="white" stop-opacity=".07"/>'
+                '<stop offset="1" stop-color="white" stop-opacity=".07"/></linearGradient>') if mobile else (
+                '<linearGradient id="rain-strength"><stop offset="0" stop-color="white"/>'
+                '<stop offset=".41" stop-color="white"/><stop offset=".45" stop-color="white" stop-opacity=".07"/>'
+                '<stop offset="1" stop-color="white" stop-opacity=".07"/></linearGradient>')
+    result = [gradient,
+       f'<clipPath id="rain-bounds"><rect x="18" y="137" width="{width-36}" height="{height-208}" rx="8"/></clipPath>',
+       f'<mask id="rain-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{width}" height="{height}"><rect width="{width}" height="{height}" fill="url(#rain-strength)"/></mask>']
+    for i,lens in enumerate(LENSES):
+        result.append(f'<clipPath id="lens-{i}"><polygon points="{source_points(lens)}"/></clipPath>')
+    return ''.join(result)
+
+
+def binary_stream(x,y,step,count,rng,animated=False,distance=0,duration=12,opacity=.4,size=12):
+    digits=''.join(rng.choice('01') for _ in range(count))
+    spans=''.join(f'<tspan x="{x:g}" y="{y+i*step:g}" fill="{("#99ffbf" if i==count-1 else "#31d971")}" opacity="{.22+.78*(i/(count-1))**1.8:.2f}">{digit}</tspan>' for i,digit in enumerate(digits))
+    animation=(f'<animateTransform attributeName="transform" type="translate" from="0 {-count*step-40:g}" '
+               f'to="0 {distance:g}" dur="{duration:g}s" begin="{-rng.uniform(0,duration):.2f}s" repeatCount="indefinite"/>') if animated else ''
+    return f'<g opacity="{opacity}" font-size="{size}">{animation}<text>{spans}</text></g>'
+
+
+def matrix_background(width,height,mobile):
+    rng=random.Random(7319)
+    output=['<g id="matrix-rain" aria-label="Subtle falling green binary digits" clip-path="url(#rain-bounds)" mask="url(#rain-mask)">']
+    for animated,klass in [(True,'rain-motion'),(False,'rain-still')]:
+        output.append(f'<g class="{klass}">')
+        # Deliberately sparse so this reads as a terminal rather than a wallpaper.
+        for x in range(31,width-22,26):
+            count=rng.randrange(12,25)
+            y=0 if animated else rng.randrange(160,height-260)
+            output.append(binary_stream(x,y,19,count,rng,animated,height-130,
+                rng.randrange(14,25),rng.uniform(.42,.68),14))
+        output.append('</g>')
+    output.append('</g>');return ''.join(output)
+
+
+def portrait_knockout(x,y):
+    # The rain passes behind the real silhouette, never through the face/neck.
+    return f'<g transform="translate({x} {y})"><polygon points="{source_points(SILHOUETTE)}" fill="#0d1420"/></g>'
+
+
+def glasses_reflection(x,y):
+    rng=random.Random(1801)
+    output=[f'<g id="lens-reflections" aria-label="Green binary reflections inside the sunglasses" transform="translate({x} {y})">']
+    for index,lens in enumerate(LENSES):
+        coords=[tuple(map(float,point.split(','))) for point in source_points(lens).split()]
+        left,right=min(p[0] for p in coords),max(p[0] for p in coords)
+        top,bottom=min(p[1] for p in coords),max(p[1] for p in coords)
+        output.append(f'<g clip-path="url(#lens-{index})"><g transform="translate(0 {top:g})">')
+        for animated,klass in [(True,'rain-motion'),(False,'rain-still')]:
+            output.append(f'<g class="{klass}">')
+            for col in range(4):
+                position=left+10+col*(right-left-20)/3
+                # Short, sparse trails stay inside the photographed lenses.
+                output.append(binary_stream(position,0,10,6,rng,
+                    animated,bottom-top+18,rng.randrange(6,11),.80,8.5))
+            output.append('</g>')
+        output.append('</g></g>')
+    output.append('</g>');return ''.join(output)
+
+
 def header(width):
     return f'''<rect x="1" y="1" width="{width-2}" height="64" rx="17" fill="{COLORS['bar']}"/>
 <path d="M1 48H{width-1}V65H1Z" fill="{COLORS['bar']}"/>
@@ -119,11 +200,12 @@ def header(width):
 
 
 def svg(chars,inks,mobile=False):
-    width,height=(720,1780) if mobile else (1240,900)
+    width,height=(720,1887) if mobile else (1240,900)
     out=[f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
 <title id="title">Juan Pablo Morais Stein — terminal profile</title>
 <desc id="desc">Neofetch-inspired profile. ASCII portrait sampled from Juan's photograph, including his hairstyle and sunglasses. Juan is 18 years old, from Gaspar, Santa Catarina, Brazil; a Computer Science Student at FURB focused on Web Development with Java. OS: Omarchy / Arch Linux. Editor: Visual Studio Code. Languages: Portuguese (Native). Instagram: @juan_stein. Email: juanpablomoraisstein@gmail.com.</desc>
-<defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#101825"/><stop offset="1" stop-color="#0b1019"/></linearGradient></defs>
+<defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#101825"/><stop offset="1" stop-color="#0b1019"/></linearGradient>{matrix_defs(width,height,mobile)}</defs>
+<style>.rain-still {{ display:none }} @media (prefers-reduced-motion: reduce) {{ .rain-motion {{ display:none }} .rain-still {{ display:inline }} }}</style>
 <rect x="1" y="1" width="{width-2}" height="{height-2}" rx="17" fill="url(#surface)" stroke="{COLORS['border']}" stroke-width="2"/>
 <g font-family="{FONT}">
 {header(width)}''']
@@ -131,7 +213,10 @@ def svg(chars,inks,mobile=False):
             text(145 if mobile else 155,108,'~',19,COLORS['orange']),
             text(171 if mobile else 181,108,'$ neofetch',19,COLORS['text'])]
     if mobile:
+        out.append(matrix_background(width,height,True))
+        out.append(portrait_knockout(136,156))
         out.append(ascii_group(chars,inks,136,156,1.0))
+        out.append(glasses_reflection(136,156))
         out.append(f'<path d="M36 824H684" stroke="{COLORS["border"]}"/>')
         x,y=36,878
         out += [text(x,y,'juan@github',30,COLORS['cyan'],700),text(x,y+28,'-----------',25,COLORS['muted'])]
@@ -147,7 +232,10 @@ def svg(chars,inks,mobile=False):
         out[0]=out[0].replace('height="1780"','height="'+str(height)+'"').replace('0 0 720 1780','0 0 720 '+str(height)).replace('height="1778"','height="'+str(height-2)+'"')
         out.append(text(x,bottom,'$ _',22,COLORS['cyan']))
     else:
+        out.append(matrix_background(width,height,False))
+        out.append(portrait_knockout(44,176))
         out.append(ascii_group(chars,inks,44,176,1.0))
+        out.append(glasses_reflection(44,176))
         out.append(f'<path d="M530 163V811" stroke="{COLORS["border"]}"/>')
         x,y=570,179
         out += [text(x,y,'juan@github',27,COLORS['cyan'],700),text(x,y+28,'-----------',22,COLORS['muted'])]

@@ -58,3 +58,22 @@ browser-testing dependency is needed to display the profile. The checks cover
 light/dark backgrounds, desktop, 768px tablet, 390px phone and 320px phone widths,
 assert the correct responsive asset is chosen, and check for text clipping and
 horizontal page overflow.
+
+## Binary rain and contour update
+
+The neck and shoulders are isolated using a refined silhouette from the original
+photo, with feathered ASCII edges to avoid chair fragments and cut-out gaps.
+The portrait is an opaque foreground over the rain, so digits stay behind the
+face instead of obscuring it.
+
+Binary streams use native SVG `animateTransform`, not JavaScript, video, GIFs or
+an external service. The green field fades almost completely behind the profile
+information. Two separate clip paths follow the photographed sunglasses lenses;
+only a few brighter, slower streams appear as reflections inside them.
+
+The `prefers-reduced-motion` media query replaces the moving layers with static
+digits. To check movement and the static fallback in the development environment:
+
+```sh
+python scripts/check_animation.py
+```
