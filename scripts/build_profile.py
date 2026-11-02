@@ -168,7 +168,7 @@ def matrix_background(width,height,mobile):
 def portrait_knockout(x,y):
     # The rain passes behind the real silhouette, never through the face/neck.
     shapes=''.join(f'<polygon points="{source_points(shape)}" fill="#0d1420"/>' for shape in SILHOUETTES)
-    return f'<g transform="translate({x} {y})">{shapes}</g>' 
+    return f'<g transform="translate({x} {y})">{shapes}</g>'
 
 
 def header(width):
